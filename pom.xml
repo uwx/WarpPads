@@ -1,14 +1,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>raytech</groupId>
-    <artifactId>WoodDropFix</artifactId>
+    <artifactId>WarpPads</artifactId>
     <!-- Version is used in plugin.yml -->
     <version>0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <!-- Plugin Information -->
     <!-- Name, Description, and URL are used in plugin.yml -->
-    <name>WoodDropFix</name>
+    <name>WarpPads</name>
     <description>Replaces wood block drops with logs</description>
     <url>https://github.com/uwx/WoodDropFix</url>
 
@@ -62,15 +62,15 @@
 
     <developers>
         <developer>
-                <name>Maxine</name>
-                <url>https://github.com/uwx</url>
+            <name>Maxine</name>
+            <url>https://github.com/uwx</url>
         </developer>
     </developers>
 
     <properties>
         <!--  Author and MainClass are used in plugin.yml -->
         <author>Maxine</author>
-        <mainClass>raytech.wooddropfix.SpigotPlugin</mainClass>
+        <mainClass>raytech.warppads.SpigotPlugin</mainClass>
         <apiVersion>1.16</apiVersion>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
@@ -119,6 +119,14 @@
                 <configuration>
                     <source>1.7</source>
                     <target>1.7</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>8</source>
+                    <target>8</target>
                 </configuration>
             </plugin>
         </plugins>
