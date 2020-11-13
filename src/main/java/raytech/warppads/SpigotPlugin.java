@@ -27,7 +27,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -93,37 +92,6 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    /**
-     *
-     * @param warpData
-     * @param player
-     */
-    private void renderWarps(WarpData warpData, Player player) {
-        if (warpData.warpsBySector1024.isEmpty()) {
-            return;
-        }
-
-        Location location = player.getLocation();
-        int playerX = (int) location.getX();
-        int playerY = (int) location.getY();
-        int playerZ = (int) location.getZ();
-
-        final int squared1024 = 1024 * 1024;
-
-        for (int xOff = -1; xOff <= 1; xOff++) {
-            for (int zOff = -1; zOff <= 1; zOff++) {
-                Collection<Warp> warps = warpData.warpsBySector1024.get(WarpData.getSectorHash1024(playerX + (xOff * 1024), playerZ + (zOff * 1024)));
-
-                for (Warp warp : warps) {
-                    double distanceSquared = NumberConversions.square(playerX - warp.x) + NumberConversions.square(playerY - warp.y) + NumberConversions.square(playerZ - warp.z);
-                    if (distanceSquared <= squared1024) {
-                        renderWarpLine(player.getWorld(), player.getEyeLocation(), warp);
-                    }
-                }
-            }
-        }
-    }
-
     public CustomItem createItem(String displayName, String unlocalizedName, Supplier<ItemStack> createItem, Consumer<ShapedRecipe>... recipes) {
         ItemStack item = createItem.get();
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
@@ -163,7 +131,6 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
 
             Warp warp = new Warp(placeX, placeY, placeZ, label);
             worldWarpData.warps.put(new BlockVector(placeX, placeY, placeZ), warp);
-            worldWarpData.warpsBySector1024.put(WarpData.getSectorHash1024(placeX, placeZ), warp);
 
             // Save all warps to the warpdata.txt file in the world directory.
             Map<BlockVector, Warp> copyOfWarps = worldWarpData.warps;
@@ -202,6 +169,27 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
             warpData.playersStandingOnWarps.remove(player);
         } else {
             warpData.playersStandingOnWarps.add(player);
+        }
+    }
+
+    /**
+     * Renders particle lines towards all warps a player is in range of
+     * @param warpData The {@link WarpData} instance for the world the player is in
+     * @param player The player themselves
+     */
+    private static void renderWarps(WarpData warpData, Player player) {
+        Location location = player.getLocation();
+        int playerX = (int) location.getX();
+        int playerY = (int) location.getY();
+        int playerZ = (int) location.getZ();
+
+        final int squared1024 = 1024 * 1024;
+
+        for (Warp warp : warpData.warps.values()) {
+            double distanceSquared = NumberConversions.square(playerX - warp.x) + NumberConversions.square(playerY - warp.y) + NumberConversions.square(playerZ - warp.z);
+            if (distanceSquared <= squared1024) {
+                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp);
+            }
         }
     }
 

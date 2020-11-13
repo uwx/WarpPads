@@ -1,7 +1,5 @@
 package raytech.warppads;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Multimap;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BlockVector;
@@ -22,28 +20,15 @@ import java.util.Set;
  * @author Maxine
  * @since 12/11/2020
  */
-class WarpData {
+public class WarpData {
     /**
      * A table mapping warp locations to every warp contained in this {@link WarpData}
      */
     public final Map<BlockVector, Warp> warps = Collections.synchronizedMap(new HashMap<>());
 
     /**
-     * A table mapping a combined key of (x / 1024 | z / 1024 << 16) to a list of warps in the relevant range.
-     * This map partitions the world in 1024x1024 chunks, which is slightly larger than the 1000x1000 maximum range for
-     * tier 1 warp pads, which allows for partitioning warp lists into smaller segments, not requiring to iterate
-     * through every single warp in the world.
-     *
-     * @see #getSectorHash1024
+     * A set of players currently standing on warp pads. Updated on player move.
      */
-    public final Multimap<Integer, Warp> warpsBySector1024 = ArrayListMultimap.create();
-    public static int getSectorHash1024(int x, int z) {
-        short xSector = (short) (x / 1024);
-        short zSector = (short) (z / 1024);
-
-        return xSector | (zSector << 16);
-    }
-    
     public final Set<Player> playersStandingOnWarps = new HashSet<>();
 
     public static class Warp {
@@ -62,6 +47,10 @@ class WarpData {
         public String save() {
             return x + "," + y + "," + z + "," + label;
         }
+
+        public BlockVector getVector() {
+            return new BlockVector(x, y, z);
+        }
     }
 
     public static WarpData load(File warpdataFile) {
@@ -76,7 +65,8 @@ class WarpData {
 
                 String[] components = line.split(",");
 
-                warpData.warps.add(new WarpData.Warp(Integer.parseInt(components[0]), Integer.parseInt(components[1]), Integer.parseInt(components[2]), components[3]));
+                Warp warp = new Warp(Integer.parseInt(components[0]), Integer.parseInt(components[1]), Integer.parseInt(components[2]), components[3]);
+                warpData.warps.put(warp.getVector(), warp);
             }
 
             return warpData;
