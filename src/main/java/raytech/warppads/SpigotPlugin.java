@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -190,6 +191,10 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
     public void onPlayerUse(PlayerInteractEvent event){
         Player player = event.getPlayer();
 
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+
         ItemStack mainHandItem = player.getInventory().getItemInMainHand();
         if (warpPadT1.matches(mainHandItem)) {
             event.setCancelled(true);
@@ -312,11 +317,11 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             int x = location.getBlock().getX();
             int y = location.getBlock().getY();
             int z = location.getBlock().getZ();
-
-            Warp warp = warpData.warps.get(new BlockVector(x, y, z));
-            if (warp == null) {
+            if (!warpData.warps.containsKey(new BlockVector(x, y, z))) {
                 return;
             }
+
+            Warp warp = getClosestWarp(player, warpData, null);
 
             player.teleport(new Location(event.getPlayer().getWorld(), warp.x + 0.5, warp.y + 0.5, warp.z + 0.5), TeleportCause.PLUGIN);
         }
@@ -328,44 +333,10 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
      * @param player The player themselves
      */
     private static void renderWarps(WarpData warpData, Player player) {
-        Location location = player.getLocation();
-        int playerX = (int) location.getX();
-        int playerY = (int) location.getY();
-        int playerZ = (int) location.getZ();
-
-        // To avoid getting the square root of distances, we do all the
-        final int squaredDistLimit = Config.warpPadT1Range * Config.warpPadT1Range;
-
-        Vector headDirection = location.getDirection();
-
-        // Highlighted warp (line is closest to player's head) and angle distance score (lower is better)
-        float shortestDistance = Float.MAX_VALUE;
-        Warp closestWarp = null;
-
         // List of warps within teleport range
         List<Warp> reachableWarps = new LinkedList<>();
 
-        for (Warp warp : warpData.warps.values()) {
-            double distanceSquared = VectorUtil.distanceSquared(playerX, playerY, playerZ, warp.x, warp.y, warp.z);
-
-            if (distanceSquared <= squaredDistLimit) {
-                float angleDistance = VectorUtil.subtractNormalizeDistanceSquared(
-                        // warp (destination)
-                        warp.x + 0.5, warp.y + 1.5, warp.z + 0.5,
-                        // player location (origin)
-                        location.getX(), location.getY(), location.getZ(),
-                        // head direction (to compare against)
-                        headDirection.getX(), headDirection.getY(), headDirection.getZ()
-                );
-
-                if (angleDistance < shortestDistance) {
-                    shortestDistance = angleDistance;
-                    closestWarp = warp;
-                }
-
-                reachableWarps.add(warp);
-            }
-        }
+        Warp closestWarp = getClosestWarp(player, warpData, reachableWarps);
 
         for (Warp warp : reachableWarps) {
             if (warp == closestWarp) {
@@ -377,6 +348,60 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, warpLineParticle);
             }
         }
+    }
+
+    /**
+     * Gets the closest warp a player is facing for a given {@link WarpData}. Optionally collects a list of all
+     * reachable warps from the player's location.
+     *
+     * @param player The player to compute warps from
+     * @param warpData The warp data for the player's world
+     * @param reachableWarps A list to fill with all warps reachable by the player
+     * @return The closest warp to the player's head direction, or {@code null} if there are no warps reachable by the
+     *         player
+     */
+    private static Warp getClosestWarp(Player player, WarpData warpData, List<Warp> reachableWarps) {
+        Location location = player.getLocation();
+        double playerX = location.getX();
+        double playerY = location.getY();
+        double playerZ = location.getZ();
+
+        double eyeHeight = player.getEyeHeight();
+
+        Vector headDirection = location.getDirection();
+
+        // To avoid getting the square root of distances, we do all the
+        final int squaredDistLimit = Config.warpPadT1Range * Config.warpPadT1Range;
+
+        // Highlighted warp (line is closest to player's head) and angle distance score (lower is better)
+        float shortestDistance = Float.MAX_VALUE;
+        Warp closestWarp = null;
+
+        for (Warp warp : warpData.warps.values()) {
+            double distanceSquared = VectorUtil.distanceSquared(playerX, playerY, playerZ, warp.x, warp.y, warp.z);
+
+            if (distanceSquared <= squaredDistLimit) {
+                float angleDistance = VectorUtil.subtractNormalizeDistanceSquared(
+                        // warp (destination)
+                        warp.x + 0.5, warp.y + eyeHeight, warp.z + 0.5,
+                        // player location (origin)
+                        location.getX(), location.getY() + eyeHeight, location.getZ(),
+                        // head direction (to compare against)
+                        headDirection.getX(), headDirection.getY(), headDirection.getZ()
+                );
+
+                if (angleDistance < shortestDistance) {
+                    shortestDistance = angleDistance;
+                    closestWarp = warp;
+                }
+
+                if (reachableWarps != null) {
+                    reachableWarps.add(warp);
+                }
+            }
+        }
+
+        return closestWarp;
     }
 
     /**
