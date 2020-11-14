@@ -385,7 +385,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                         // warp (destination)
                         warp.x + 0.5, warp.y + eyeHeight, warp.z + 0.5,
                         // player location (origin)
-                        location.getX(), location.getY() + eyeHeight, location.getZ(),
+                        playerX + 0.5, playerY + eyeHeight, playerZ + 0.5,
                         // head direction (to compare against)
                         headDirection.getX(), headDirection.getY(), headDirection.getZ()
                 );
