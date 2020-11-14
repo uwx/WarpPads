@@ -1,5 +1,6 @@
 package raytech.warppads;
 
+import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Particle;
 import org.bukkit.World;
@@ -36,12 +37,14 @@ public class WarpData {
     public static class Warp {
         public static final Particle.DustOptions particle = new Particle.DustOptions(Color.RED, 1);
         public static final Particle.DustOptions highlightParticle = new Particle.DustOptions(Color.PURPLE, 1);
+        public static final ChatColor defaultLabelColor = ChatColor.LIGHT_PURPLE;
 
         public final int x;
         public final int y;
         public final int z;
         public final String label;
         public Particle.DustOptions highlightColor = highlightParticle;
+        public ChatColor labelColor = defaultLabelColor;
 
         public Warp(int x, int y, int z, String label) {
             this.x = x;
@@ -51,6 +54,10 @@ public class WarpData {
         }
 
         public String save() {
+            if (labelColor != defaultLabelColor) {
+                return x + "," + y + "," + z + "," + label + "," + highlightColor.getColor() + "," + labelColor.getChar();
+            }
+
             if (highlightColor != highlightParticle) {
                 return x + "," + y + "," + z + "," + label + "," + highlightColor.getColor();
             }
@@ -76,6 +83,11 @@ public class WarpData {
                 String[] components = line.split(",");
 
                 Warp warp = new Warp(Integer.parseInt(components[0]), Integer.parseInt(components[1]), Integer.parseInt(components[2]), components[3]);
+
+                if (components.length > 5) {
+                    warp.labelColor = ChatColor.getByChar(components[5]);
+                }
+
                 if (components.length > 4) {
                     warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[4])), 1);
                 }

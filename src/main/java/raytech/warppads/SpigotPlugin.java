@@ -196,59 +196,59 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         // Color a warp block or remove its color
         switch (mainHandItem.getType()) {
             case WATER_BUCKET:
-                tryColor(event.getClickedBlock(), Warp.highlightParticle.getColor());
+                tryColor(event.getClickedBlock(), Warp.highlightParticle.getColor(), Warp.defaultLabelColor);
                 event.getPlayer().getInventory().setItemInMainHand(new ItemStack(Material.BUCKET));
                 return;
             case BONE_MEAL:
             case WHITE_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0xF9FFFE));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xF9FFFE), ChatColor.WHITE);
                 return;
             case ORANGE_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0xF9801D));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xF9801D), ChatColor.GOLD);
                 return;
             case MAGENTA_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0xC74EBD));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xC74EBD), ChatColor.LIGHT_PURPLE);
                 return;
             case LIGHT_BLUE_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x3AB3DA));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x3AB3DA), ChatColor.AQUA);
                 return;
             case YELLOW_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0xFED83D));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xFED83D), ChatColor.YELLOW);
                 return;
             case LIME_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x80C71F));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x80C71F), ChatColor.GREEN);
                 return;
             case PINK_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0xF38BAA));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xF38BAA), ChatColor.LIGHT_PURPLE);
                 return;
             case GRAY_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x474F52));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x474F52), ChatColor.DARK_GRAY);
                 return;
             case LIGHT_GRAY_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x9D9D97));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x9D9D97), ChatColor.GRAY);
                 return;
             case CYAN_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x169C9C));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x169C9C), ChatColor.DARK_AQUA);
                 return;
             case PURPLE_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x8932B8));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x8932B8), ChatColor.DARK_PURPLE);
                 return;
             case BLUE_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x3C44AA));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x3C44AA), ChatColor.DARK_BLUE);
                 return;
             case COCOA_BEANS:
             case BROWN_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x835432));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x835432), ChatColor.DARK_RED);
                 return;
             case GREEN_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x5E7C16));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x5E7C16), ChatColor.DARK_GREEN);
                 return;
             case RED_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0xB02E26));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xB02E26), ChatColor.RED);
                 return;
             case INK_SAC:
             case BLACK_DYE:
-                tryColor(event.getClickedBlock(), Color.fromRGB(0x1D1D21));
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x1D1D21), ChatColor.BLACK);
                 return;
         }
 
@@ -264,6 +264,11 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             int placeY = event.getClickedBlock().getY() + event.getBlockFace().getModY();
             int placeZ = event.getClickedBlock().getZ() + event.getBlockFace().getModZ();
             String label = mainHandItem.getItemMeta().getDisplayName();
+
+            // Remove color code from label
+            if (label.startsWith(Character.toString(ChatColor.COLOR_CHAR))) {
+                label = label.substring(2);
+            }
 
             Block blockAtLocation = player.getWorld().getBlockAt(placeX, placeY, placeZ);
             if (!blockAtLocation.isEmpty() && !blockAtLocation.isLiquid() && blockAtLocation.getType() != Material.GRASS) {
@@ -292,8 +297,9 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
      * Detects whether a block is a warp, and gives it the provided highlight color if so. Does not consume any item.
      * @param block The warp's block to set the highlight color of
      * @param color The highlight color to set the warp to
+     * @param chatColor
      */
-    private void tryColor(Block block, Color color) {
+    private void tryColor(Block block, Color color, ChatColor chatColor) {
         if (block == null) { // Necessary, I presume for air?
             return;
         }
@@ -313,6 +319,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }
 
         warp.highlightColor = new Particle.DustOptions(color, 1);
+        warp.labelColor = chatColor;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -431,7 +438,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             if (warp == closestWarp) {
                 renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, true);
 
-                String message = ChatColor.RED + "Sneak to warp to " + ChatColor.LIGHT_PURPLE + warp.label;
+                String message = ChatColor.RED + "Sneak to warp to " + warp.labelColor + warp.label;
                 player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
             } else {
                 renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, false);
