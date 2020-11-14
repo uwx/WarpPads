@@ -1,5 +1,6 @@
 package raytech.warppads;
 
+import org.apache.commons.lang.StringUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Particle;
@@ -16,6 +17,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * A collection of warps, usually tied to a {@link World}.
@@ -39,6 +41,7 @@ public class WarpData {
         public static final Particle.DustOptions highlightParticle = new Particle.DustOptions(Color.PURPLE, 1);
         public static final ChatColor defaultLabelColor = ChatColor.LIGHT_PURPLE;
 
+        public final UUID authorUUID;
         public final int x;
         public final int y;
         public final int z;
@@ -46,23 +49,63 @@ public class WarpData {
         public Particle.DustOptions highlightColor = highlightParticle;
         public ChatColor labelColor = defaultLabelColor;
 
-        public Warp(int x, int y, int z, String label) {
+        public Warp(UUID authorUUID, int x, int y, int z, String label) {
+            this.authorUUID = authorUUID;
             this.x = x;
             this.y = y;
             this.z = z;
             this.label = label;
         }
 
+        /**
+         * Serializes a warp pod to a string.
+         * @return The serialized string
+         */
         public String save() {
-            if (labelColor != defaultLabelColor) {
-                return x + "," + y + "," + z + "," + label + "," + highlightColor.getColor() + "," + labelColor.getChar();
-            }
+            // Append UUID
+            String str = Long.toString(authorUUID.getMostSignificantBits(), 36) + "," + Long.toString(authorUUID.getLeastSignificantBits(), 36);
 
+            // Append position
+            str += Integer.toString(x, 36) + "," + Integer.toString(y, 36) + "," + Integer.toString(z, 36);
+
+            // Append label (sanitized)
+            str += "," + StringUtils.replaceChars(label, "\n\r,", "  _");
+
+            // Append highlight and label colors
             if (highlightColor != highlightParticle) {
-                return x + "," + y + "," + z + "," + label + "," + highlightColor.getColor();
+                str += "," + Integer.toString(highlightColor.getColor().asRGB(), 36);
+
+                if (labelColor != defaultLabelColor) {
+                    str += "," + labelColor.getChar();
+                }
             }
 
-            return x + "," + y + "," + z + "," + label;
+            return str;
+        }
+
+        /**
+         * Deserializes a warp pod from a string.
+         * @param str The serialized string line
+         * @return The deserialized warp pod instance
+         */
+        public static Warp load(String str) {
+            String[] components = StringUtils.split(str, ',');
+
+            Warp warp = new Warp(
+                    new UUID(Long.parseLong(components[0], 36), Long.parseLong(components[1], 36)),
+                    Integer.parseInt(components[2], 36),
+                    Integer.parseInt(components[3], 36),
+                    Integer.parseInt(components[4], 36),
+                    components[5]
+            );
+
+            if (components.length > 6) {
+                warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[6], 36)), 1);
+            }
+
+            if (components.length > 7) {
+                warp.labelColor = ChatColor.getByChar(components[7]);
+            }
         }
 
         public BlockVector getVector() {
@@ -80,17 +123,7 @@ public class WarpData {
                     continue;
                 }
 
-                String[] components = line.split(",");
-
-                Warp warp = new Warp(Integer.parseInt(components[0]), Integer.parseInt(components[1]), Integer.parseInt(components[2]), components[3]);
-
-                if (components.length > 5) {
-                    warp.labelColor = ChatColor.getByChar(components[5]);
-                }
-
-                if (components.length > 4) {
-                    warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[4])), 1);
-                }
+                Warp warp = Warp.load(line);
 
                 warpData.warps.put(warp.getVector(), warp);
             }

@@ -265,7 +265,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             int placeZ = event.getClickedBlock().getZ() + event.getBlockFace().getModZ();
             String label = mainHandItem.getItemMeta().getDisplayName();
 
-            // Remove color code from label
+            // Remove color code from label. This also removes the italics code added by renaming the item.
             if (label.startsWith(Character.toString(ChatColor.COLOR_CHAR))) {
                 label = label.substring(2);
             }
@@ -281,7 +281,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 warpDataMap.put(player.getWorld(), worldWarpData);
             }
 
-            Warp warp = new Warp(placeX, placeY, placeZ, label);
+            Warp warp = new Warp(player.getUniqueId(), placeX, placeY, placeZ, label);
             worldWarpData.warps.put(new BlockVector(placeX, placeY, placeZ), warp);
 
             // Save all warps to the warpdata.txt file in the world directory.
