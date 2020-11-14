@@ -19,6 +19,8 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -239,7 +241,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        event.setCancelled(true);
+        event.setDropItems(false);
 
         ItemStack item = warpPadT1.get();
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
@@ -284,19 +286,39 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }
 
         Location location = player.getLocation();
-        int x = (int) location.getBlock().getX();
-        int y = (int) location.getBlock().getY();
-        int z = (int) location.getBlock().getZ();
-
-        /*if (x < 0) x -= 1;
-        if (y < 0) y -= 1;
-        if (z < 0) z -= 1;*/
+        int x = location.getBlock().getX();
+        int y = location.getBlock().getY();
+        int z = location.getBlock().getZ();
 
         Warp warp = warpData.warps.get(new BlockVector(x, y, z));
         if (warp == null) {
             warpData.playersStandingOnWarps.remove(player);
         } else {
             warpData.playersStandingOnWarps.add(player);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerToggleSneak(PlayerToggleSneakEvent event) {
+        Player player = event.getPlayer();
+
+        if (event.isSneaking()) {
+            WarpData warpData = warpDataMap.get(player.getWorld());
+            if (warpData == null) {
+                return;
+            }
+
+            Location location = player.getLocation();
+            int x = location.getBlock().getX();
+            int y = location.getBlock().getY();
+            int z = location.getBlock().getZ();
+
+            Warp warp = warpData.warps.get(new BlockVector(x, y, z));
+            if (warp == null) {
+                return;
+            }
+
+            player.teleport(new Location(event.getPlayer().getWorld(), warp.x + 0.5, warp.y + 0.5, warp.z + 0.5), TeleportCause.PLUGIN);
         }
     }
 
