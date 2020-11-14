@@ -500,8 +500,9 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         Vector headDirection = location.getDirection();
 
-        // To avoid getting the square root of distances, we do all the
+        // To avoid getting the square root of distances, we do all the math in squared numbers
         final int squaredDistLimit = Config.warpPadT1Range * Config.warpPadT1Range;
+        final int squaredDistMinimum = 3 * 3;
 
         // Highlighted warp (line is closest to player's head) and angle distance score (lower is better)
         float shortestDistance = Float.MAX_VALUE;
@@ -515,24 +516,26 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
             double distanceSquared = VectorUtil.distanceSquared(playerX, playerY, playerZ, warp.x, warp.y, warp.z);
 
-            if (distanceSquared <= squaredDistLimit) {
-                float angleDistance = VectorUtil.subtractNormalizeDistanceSquared(
-                        // warp (destination)
-                        warp.x + 0.5, warp.y + eyeHeight, warp.z + 0.5,
-                        // player location (origin)
-                        playerX + 0.5, playerY + eyeHeight, playerZ + 0.5,
-                        // head direction (to compare against)
-                        headDirection.getX(), headDirection.getY(), headDirection.getZ()
-                );
+            if (distanceSquared < squaredDistMinimum || distanceSquared > squaredDistLimit) {
+                continue;
+            }
 
-                if (angleDistance < shortestDistance) {
-                    shortestDistance = angleDistance;
-                    closestWarp = warp;
-                }
+            float angleDistance = VectorUtil.subtractNormalizeDistanceSquared(
+                    // warp (destination)
+                    warp.x + 0.5, warp.y + eyeHeight, warp.z + 0.5,
+                    // player location (origin)
+                    playerX + 0.5, playerY + eyeHeight, playerZ + 0.5,
+                    // head direction (to compare against)
+                    headDirection.getX(), headDirection.getY(), headDirection.getZ()
+            );
 
-                if (reachableWarps != null) {
-                    reachableWarps.add(warp);
-                }
+            if (angleDistance < shortestDistance) {
+                shortestDistance = angleDistance;
+                closestWarp = warp;
+            }
+
+            if (reachableWarps != null) {
+                reachableWarps.add(warp);
             }
         }
 
