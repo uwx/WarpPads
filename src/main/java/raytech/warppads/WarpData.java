@@ -51,6 +51,10 @@ public class WarpData {
         }
 
         public String save() {
+            if (highlightColor != highlightParticle) {
+                return x + "," + y + "," + z + "," + label + "," + highlightColor.getColor();
+            }
+
             return x + "," + y + "," + z + "," + label;
         }
 
@@ -72,6 +76,10 @@ public class WarpData {
                 String[] components = line.split(",");
 
                 Warp warp = new Warp(Integer.parseInt(components[0]), Integer.parseInt(components[1]), Integer.parseInt(components[2]), components[3]);
+                if (components.length > 4) {
+                    warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[4])), 1);
+                }
+
                 warpData.warps.put(warp.getVector(), warp);
             }
 
