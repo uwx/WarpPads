@@ -16,3 +16,13 @@ commands:
     usage: "Usage: /<command> [help|reload|clear [world]|give]"
     permission: minecraft.command.stop
     permission-message: Only server operators may use this command.
+  warpallow:
+    description: Whitelists a player to be able to access all of your private warps.
+    aliases: [wpallow]
+    usage: "Usage: /<command> [nickname]"
+    permission: essentials.build
+  warpdeny:
+    description: Removes a player from your private warp blacklist.
+    aliases: [wpdeny]
+    usage: "Usage: /<command> [nickname]"
+    permission: essentials.build

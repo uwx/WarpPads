@@ -25,7 +25,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.util.BlockVector;
 import org.bukkit.util.Vector;
 import raytech.warppads.WarpData.Warp;
 
@@ -34,16 +33,16 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.function.Consumer;
 
 public final class SpigotPlugin extends JavaPlugin implements Listener {
-    public final Map<World, WarpData> warpDataMap = new HashMap<>();
+    public final GlobalWarps warps = new GlobalWarps();
+    private final AccessList accessList = new AccessList();
+
     private final Object warpDataFileMutex = new Object();
     private final List<Integer> runningSchedulers = new ArrayList<>();
 
@@ -67,7 +66,17 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                         "Right-click to place a warp pad.",
                         "Rename this item in an anvil to set its label.",
                         "Two warp pads of this type, within 1000 blocks of",
-                        "each other, can be teleported between."),
+                        "each other, can be teleported between.",
+                        "",
+                        "Right-click the pad with a dye in hand to color",
+                        "its label. Right-click with a bucket of water to",
+                        "restore the default label. Dyes will not be",
+                        "consumed.",
+                        "",
+                        "Right-click the pad with a diamond to mark it as",
+                        "private. It will be only accessible to you and",
+                        "players you grant access to with /warpallow. You",
+                        "may disallow access with /warpdeny."),
                 recipe -> recipe
                         .shape(
                                 " q ",
@@ -85,7 +94,9 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         runSchedulers();
 
-        Objects.requireNonNull(this.getCommand("warppads")).setExecutor(new CommandWarpPads(this));
+        Objects.requireNonNull(getCommand("warppads")).setExecutor(new CommandWarpPads(this));
+        Objects.requireNonNull(getCommand("warpallow")).setExecutor(new CommandWarpAllow(this, accessList));
+        Objects.requireNonNull(getCommand("warpdeny")).setExecutor(new CommandWarpDeny(this, accessList));
 
         // Register our own event hooks
         getServer().getPluginManager().registerEvents(this, this);
@@ -100,8 +111,27 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         for (World world : getServer().getWorlds()) {
             File warpdataFile = new File(worldsRoot, world.getName() + "/warpdata.txt");
             if (warpdataFile.exists()) {
-                warpDataMap.put(world, WarpData.load(warpdataFile));
+                warps.loadWarps(world, WarpData.load(warpdataFile));
             }
+        }
+
+        if (!getDataFolder().exists() && !getDataFolder().mkdir()) {
+            getLogger().severe("Was unable to create data directory " + getDataFolder());
+        }
+
+        File accessListFile = new File(getDataFolder(), "access-list.yml");
+        if (accessListFile.exists()) {
+            accessList.loadFromFile(accessListFile);
+        }
+    }
+
+    public void saveAccessList() {
+        File accessListFile = new File(getDataFolder(), "access-list.yml");
+        String accessListSerialized = accessList.saveToString();
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(accessListFile))) {
+            writer.write(accessListSerialized);
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
         }
     }
 
@@ -117,7 +147,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         // Run scheduler for drawing particles near players standing on warp pads
         runningSchedulers.add(getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
-            warpDataMap.forEach((world, warpData) -> {
+            warps.forEach((world, warpData) -> {
                 for (Player player : warpData.playersStandingOnWarps) {
                     renderWarps(warpData, player);
                 }
@@ -130,7 +160,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             int rgb = random.nextInt();
             Particle.DustOptions particleColor = new Particle.DustOptions(Color.fromRGB(rgb & 0x00FFFFFF), 1);
 
-            warpDataMap.forEach((world, warpData) -> {
+            warps.forEach((world, warpData) -> {
                 for (Warp warp : warpData.warps.values()) {
                     if (!world.isChunkLoaded(warp.x >> 4, warp.z >> 4) || !WorldUtil.hasNearbyPlayers(world, warp.x, warp.y, warp.z, Config.warpDecorationVisibilityDistance)) {
                         continue;
@@ -190,14 +220,16 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }
 
         Player player = event.getPlayer();
-
         ItemStack mainHandItem = player.getInventory().getItemInMainHand();
 
-        // Color a warp block or remove its color
         switch (mainHandItem.getType()) {
+            case DIAMOND:
+                tryMakePrivate(event);
+                return;
+            // Color a warp block or remove its color
             case WATER_BUCKET:
                 tryColor(event.getClickedBlock(), Warp.highlightParticle.getColor(), Warp.defaultLabelColor);
-                event.getPlayer().getInventory().setItemInMainHand(new ItemStack(Material.BUCKET));
+                player.getInventory().setItemInMainHand(new ItemStack(Material.BUCKET));
                 return;
             case BONE_MEAL:
             case WHITE_DYE:
@@ -260,60 +292,48 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
-            int placeX = event.getClickedBlock().getX() + event.getBlockFace().getModX();
-            int placeY = event.getClickedBlock().getY() + event.getBlockFace().getModY();
-            int placeZ = event.getClickedBlock().getZ() + event.getBlockFace().getModZ();
-            String label = mainHandItem.getItemMeta().getDisplayName();
-
-            // Remove color code from label. This also removes the italics code added by renaming the item.
-            if (label.startsWith(Character.toString(ChatColor.COLOR_CHAR))) {
-                label = label.substring(2);
-            }
-
-            Block blockAtLocation = player.getWorld().getBlockAt(placeX, placeY, placeZ);
-            if (!blockAtLocation.isEmpty() && !blockAtLocation.isLiquid() && blockAtLocation.getType() != Material.GRASS) {
-                return;
-            }
-
-            WarpData worldWarpData = warpDataMap.get(player.getWorld());
-            if (worldWarpData == null) {
-                worldWarpData = new WarpData();
-                warpDataMap.put(player.getWorld(), worldWarpData);
-            }
-
-            Warp warp = new Warp(player.getUniqueId(), placeX, placeY, placeZ, label);
-            worldWarpData.warps.put(new BlockVector(placeX, placeY, placeZ), warp);
-
-            // Save all warps to the warpdata.txt file in the world directory.
-            saveWarpsToFile(player.getWorld());
-
-            mainHandItem.setAmount(mainHandItem.getAmount() - 1);
-            player.getInventory().setItemInMainHand(mainHandItem.getAmount() != 0 ? mainHandItem : null);
-            blockAtLocation.setType(Material.QUARTZ_SLAB);
+            placeWarpPadT1(event);
+            return;
         }
+    }
+
+    private void tryMakePrivate(PlayerInteractEvent event) {
+        Block block = event.getClickedBlock();
+        if (block == null) { // Necessary, I presume for air?
+            return;
+        }
+
+        Warp warp = warps.get(block.getWorld(), block.getX(), block.getY(), block.getZ());
+        if (warp == null) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        if (!warp.authorUUID.equals(player.getUniqueId())) {
+            String playerName = warp.getAuthorName(getServer());
+            player.sendMessage(ChatColor.DARK_RED + "You do not own this Warp Pod. It is owned by " + playerName + ".");
+        }
+
+        warp.isPrivate = true;
+
+        // Take one diamond off
+        ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+        mainHandItem.setAmount(mainHandItem.getAmount() - 1);
+        player.getInventory().setItemInMainHand(mainHandItem.getAmount() != 0 ? mainHandItem : null);
     }
 
     /**
      * Detects whether a block is a warp, and gives it the provided highlight color if so. Does not consume any item.
      * @param block The warp's block to set the highlight color of
      * @param color The highlight color to set the warp to
-     * @param chatColor
+     * @param chatColor The label color to set the warp to
      */
     private void tryColor(Block block, Color color, ChatColor chatColor) {
         if (block == null) { // Necessary, I presume for air?
             return;
         }
 
-        WarpData warpData = warpDataMap.get(block.getWorld());
-        if (warpData == null) {
-            return;
-        }
-
-        int x = block.getX();
-        int y = block.getY();
-        int z = block.getZ();
-
-        Warp warp = warpData.warps.get(new BlockVector(x, y, z));
+        Warp warp = warps.get(block.getWorld(), block.getX(), block.getY(), block.getZ());
         if (warp == null) {
             return;
         }
@@ -322,17 +342,41 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         warp.labelColor = chatColor;
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onBlockBreak(BlockBreakEvent event) {
-        WarpData warpData = warpDataMap.get(event.getBlock().getWorld());
-        if (warpData == null) {
+    private void placeWarpPadT1(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+
+        int placeX = event.getClickedBlock().getX() + event.getBlockFace().getModX();
+        int placeY = event.getClickedBlock().getY() + event.getBlockFace().getModY();
+        int placeZ = event.getClickedBlock().getZ() + event.getBlockFace().getModZ();
+        String label = mainHandItem.getItemMeta().getDisplayName();
+
+        // Remove color code from label. This also removes the italics code added by renaming the item.
+        if (label.startsWith(Character.toString(ChatColor.COLOR_CHAR))) {
+            label = label.substring(2);
+        }
+
+        Block blockAtLocation = player.getWorld().getBlockAt(placeX, placeY, placeZ);
+        if (!blockAtLocation.isEmpty() && !blockAtLocation.isLiquid() && blockAtLocation.getType() != Material.GRASS) {
             return;
         }
 
+        warps.add(player.getWorld(), new Warp(player.getUniqueId(), placeX, placeY, placeZ, label));
+
+        // Save all warps to the warpdata.txt file in the world directory.
+        saveWarpsToFile(player.getWorld());
+
+        mainHandItem.setAmount(mainHandItem.getAmount() - 1);
+        player.getInventory().setItemInMainHand(mainHandItem.getAmount() != 0 ? mainHandItem : null);
+        blockAtLocation.setType(Material.QUARTZ_SLAB);
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
         int blockX = event.getBlock().getX();
         int blockY = event.getBlock().getY();
         int blockZ = event.getBlock().getZ();
-        Warp removedWarp = warpData.warps.remove(new BlockVector(blockX, blockY, blockZ));
+        Warp removedWarp = warps.remove(event.getBlock().getWorld(), blockX, blockY, blockZ);
         if (removedWarp == null) {
             return;
         }
@@ -356,7 +400,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
     public void saveWarpsToFile(World world) {
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             synchronized (warpDataFileMutex) {
-                WarpData warpData = warpDataMap.get(world);
+                WarpData warpData = warps.getWarps(world);
                 if (warpData == null) {
                     return;
                 }
@@ -376,12 +420,13 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        WarpData warpData = warpDataMap.get(player.getWorld());
+
+        WarpData warpData = warps.getWarps(player.getWorld());
         if (warpData == null) {
             return;
         }
 
-        Warp warp = getWarpUnderPlayer(player);
+        Warp warp = warpData.getWarpUnderPlayer(player);
         if (warp == null) {
             warpData.playersStandingOnWarps.remove(player);
         } else {
@@ -394,12 +439,12 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         Player player = event.getPlayer();
 
         if (event.isSneaking()) {
-            WarpData warpData = warpDataMap.get(player.getWorld());
+            WarpData warpData = warps.getWarps(player.getWorld());
             if (warpData == null) {
                 return;
             }
 
-            if (getWarpUnderPlayer(player) == null) {
+            if (warpData.getWarpUnderPlayer(player) == null) {
                 return;
             }
 
@@ -409,26 +454,12 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    public Warp getWarpUnderPlayer(Player player) {
-        WarpData warpData = warpDataMap.get(player.getWorld());
-        if (warpData == null) {
-            return null;
-        }
-
-        Location location = player.getLocation();
-        int x = location.getBlock().getX();
-        int y = location.getBlock().getY();
-        int z = location.getBlock().getZ();
-
-        return warpData.warps.get(new BlockVector(x, y, z));
-    }
-
     /**
      * Renders particle lines towards all warps a player is in range of
      * @param warpData The {@link WarpData} instance for the world the player is in
      * @param player The player themselves
      */
-    private static void renderWarps(WarpData warpData, Player player) {
+    private void renderWarps(WarpData warpData, Player player) {
         // List of warps within teleport range
         List<Warp> reachableWarps = new LinkedList<>();
 
@@ -439,6 +470,9 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, true);
 
                 String message = ChatColor.RED + "Sneak to warp to " + warp.labelColor + warp.label;
+                if (warp.isPrivate) {
+                    message += " \u2B50 " + ChatColor.AQUA + warp.getAuthorName(getServer());
+                }
                 player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
             } else {
                 renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, false);
@@ -456,7 +490,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
      * @return The closest warp to the player's head direction, or {@code null} if there are no warps reachable by the
      *         player
      */
-    private static Warp getClosestWarp(Player player, WarpData warpData, List<Warp> reachableWarps) {
+    private Warp getClosestWarp(Player player, WarpData warpData, List<Warp> reachableWarps) {
         Location location = player.getLocation();
         double playerX = location.getX();
         double playerY = location.getY();
@@ -474,6 +508,11 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         Warp closestWarp = null;
 
         for (Warp warp : warpData.warps.values()) {
+            // Omit inaccessible private warps
+            if (warp.isPrivate && warp.authorUUID != player.getUniqueId() && !accessList.contains(warp.authorUUID, player.getUniqueId())) {
+                continue;
+            }
+
             double distanceSquared = VectorUtil.distanceSquared(playerX, playerY, playerZ, warp.x, warp.y, warp.z);
 
             if (distanceSquared <= squaredDistLimit) {

@@ -3,7 +3,9 @@ package raytech.warppads;
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
+import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BlockVector;
@@ -46,6 +48,7 @@ public class WarpData {
         public final int y;
         public final int z;
         public final String label;
+        public boolean isPrivate;
         public Particle.DustOptions highlightColor = highlightParticle;
         public ChatColor labelColor = defaultLabelColor;
 
@@ -70,6 +73,9 @@ public class WarpData {
 
             // Append label (sanitized)
             str += "," + StringUtils.replaceChars(label, "\n\r,", "  _");
+
+            // Append private status
+            str += "," + (isPrivate ? '1' : '0');
 
             // Append highlight and label colors
             if (highlightColor != highlightParticle) {
@@ -99,12 +105,14 @@ public class WarpData {
                     components[5]
             );
 
-            if (components.length > 6) {
-                warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[6], 36)), 1);
-            }
+            warp.isPrivate = !components[6].equals("0");
 
             if (components.length > 7) {
-                warp.labelColor = ChatColor.getByChar(components[7]);
+                warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[7], 36)), 1);
+            }
+
+            if (components.length > 8) {
+                warp.labelColor = ChatColor.getByChar(components[8]);
             }
 
             return warp;
@@ -112,6 +120,11 @@ public class WarpData {
 
         public BlockVector getVector() {
             return new BlockVector(x, y, z);
+        }
+
+        public String getAuthorName(Server server) {
+            String playerName = server.getOfflinePlayer(authorUUID).getName();
+            return playerName != null ? playerName : "<unknown>";
         }
     }
 
@@ -136,4 +149,12 @@ public class WarpData {
         }
     }
 
+    public Warp getWarpUnderPlayer(Player player) {
+        Location location = player.getLocation();
+        int x = location.getBlock().getX();
+        int y = location.getBlock().getY();
+        int z = location.getBlock().getZ();
+
+        return warps.get(new BlockVector(x, y, z));
+    }
 }

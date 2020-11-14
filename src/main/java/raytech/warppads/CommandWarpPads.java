@@ -93,7 +93,7 @@ public class CommandWarpPads implements CommandExecutor {
                     return false;
                 }
 
-                WarpData warpData = plugin.warpDataMap.get(world);
+                WarpData warpData = plugin.warps.getWarps(world);
                 if (warpData == null) {
                     sender.sendMessage(ChatColor.RED + "WarpData for " + ChatColor.WHITE + world.getName() + ChatColor.RED + " does not exist, internal state may be corrupt");
                     return false;
