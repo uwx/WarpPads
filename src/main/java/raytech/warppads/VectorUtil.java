@@ -3,7 +3,7 @@ package raytech.warppads;
 import org.bukkit.util.NumberConversions;
 
 /**
- * Helpful class for handling vectors as primitives
+ * Helper class for handling vectors as primitives
  *
  * @author Maxine
  * @since 13/11/2020
