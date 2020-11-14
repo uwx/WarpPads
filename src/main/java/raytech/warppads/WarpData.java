@@ -1,5 +1,7 @@
 package raytech.warppads;
 
+import org.bukkit.Color;
+import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BlockVector;
@@ -32,10 +34,14 @@ public class WarpData {
     public final Set<Player> playersStandingOnWarps = new HashSet<>();
 
     public static class Warp {
+        public static final Particle.DustOptions particle = new Particle.DustOptions(Color.RED, 1);
+        public static final Particle.DustOptions highlightParticle = new Particle.DustOptions(Color.PURPLE, 1);
+
         public final int x;
         public final int y;
         public final int z;
         public final String label;
+        public Particle.DustOptions highlightColor = highlightParticle;
 
         public Warp(int x, int y, int z, String label) {
             this.x = x;

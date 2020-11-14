@@ -36,7 +36,8 @@ public class CustomItem {
     }
 
     public boolean matches(ItemStack item) {
-        return this.item.getType() == item.getType()
+        return item != null
+                && this.item.getType() == item.getType()
                 && item.hasItemMeta()
                 && Objects.requireNonNull(item.getItemMeta()).hasLocalizedName()
                 && unlocalizedName.equals(item.getItemMeta().getLocalizedName());

@@ -2,7 +2,6 @@ package raytech.warppads;
 
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -50,9 +49,6 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
     private final List<CustomItem> customItemCache = new ArrayList<>();
     public CustomItem warpPadT1;
-
-    public static final Particle.DustOptions warpLineParticle = new Particle.DustOptions(Color.RED, 1);
-    public static final Particle.DustOptions warpLineHighlightParticle = new Particle.DustOptions(Color.PURPLE, 1);
 
     @Override
     public void onLoad() {
@@ -165,7 +161,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             recipes.add(recipe);
 
             recipeConsumer.accept(recipe);
-            Bukkit.addRecipe(recipe);
+            getServer().addRecipe(recipe);
 
             recipeIndex++;
         }
@@ -189,13 +185,74 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerUse(PlayerInteractEvent event){
-        Player player = event.getPlayer();
-
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
 
+        Player player = event.getPlayer();
+
         ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+
+        // Color a warp block or remove its color
+        switch (mainHandItem.getType()) {
+            case WATER_BUCKET:
+                tryColor(event.getClickedBlock(), Warp.highlightParticle.getColor());
+                event.getPlayer().getInventory().setItemInMainHand(new ItemStack(Material.BUCKET));
+                return;
+            case BONE_MEAL:
+            case WHITE_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xF9FFFE));
+                return;
+            case ORANGE_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xF9801D));
+                return;
+            case MAGENTA_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xC74EBD));
+                return;
+            case LIGHT_BLUE_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x3AB3DA));
+                return;
+            case YELLOW_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xFED83D));
+                return;
+            case LIME_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x80C71F));
+                return;
+            case PINK_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xF38BAA));
+                return;
+            case GRAY_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x474F52));
+                return;
+            case LIGHT_GRAY_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x9D9D97));
+                return;
+            case CYAN_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x169C9C));
+                return;
+            case PURPLE_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x8932B8));
+                return;
+            case BLUE_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x3C44AA));
+                return;
+            case COCOA_BEANS:
+            case BROWN_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x835432));
+                return;
+            case GREEN_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x5E7C16));
+                return;
+            case RED_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0xB02E26));
+                return;
+            case INK_SAC:
+            case BLACK_DYE:
+                tryColor(event.getClickedBlock(), Color.fromRGB(0x1D1D21));
+                return;
+        }
+
+        // Place new warp pad
         if (warpPadT1.matches(mainHandItem)) {
             event.setCancelled(true);
 
@@ -229,6 +286,33 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             player.getInventory().setItemInMainHand(mainHandItem.getAmount() != 0 ? mainHandItem : null);
             blockAtLocation.setType(Material.QUARTZ_SLAB);
         }
+    }
+
+    /**
+     * Detects whether a block is a warp, and gives it the provided highlight color if so. Does not consume any item.
+     * @param block The warp's block to set the highlight color of
+     * @param color The highlight color to set the warp to
+     */
+    private void tryColor(Block block, Color color) {
+        if (block == null) { // Necessary, I presume for air?
+            return;
+        }
+
+        WarpData warpData = warpDataMap.get(block.getWorld());
+        if (warpData == null) {
+            return;
+        }
+
+        int x = block.getX();
+        int y = block.getY();
+        int z = block.getZ();
+
+        Warp warp = warpData.warps.get(new BlockVector(x, y, z));
+        if (warp == null) {
+            return;
+        }
+
+        warp.highlightColor = new Particle.DustOptions(color, 1);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -290,12 +374,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        Location location = player.getLocation();
-        int x = location.getBlock().getX();
-        int y = location.getBlock().getY();
-        int z = location.getBlock().getZ();
-
-        Warp warp = warpData.warps.get(new BlockVector(x, y, z));
+        Warp warp = getWarpUnderPlayer(player);
         if (warp == null) {
             warpData.playersStandingOnWarps.remove(player);
         } else {
@@ -313,11 +392,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
-            Location location = player.getLocation();
-            int x = location.getBlock().getX();
-            int y = location.getBlock().getY();
-            int z = location.getBlock().getZ();
-            if (!warpData.warps.containsKey(new BlockVector(x, y, z))) {
+            if (getWarpUnderPlayer(player) == null) {
                 return;
             }
 
@@ -325,6 +400,20 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
             player.teleport(new Location(event.getPlayer().getWorld(), warp.x + 0.5, warp.y + 0.5, warp.z + 0.5), TeleportCause.PLUGIN);
         }
+    }
+
+    public Warp getWarpUnderPlayer(Player player) {
+        WarpData warpData = warpDataMap.get(player.getWorld());
+        if (warpData == null) {
+            return null;
+        }
+
+        Location location = player.getLocation();
+        int x = location.getBlock().getX();
+        int y = location.getBlock().getY();
+        int z = location.getBlock().getZ();
+
+        return warpData.warps.get(new BlockVector(x, y, z));
     }
 
     /**
@@ -340,12 +429,12 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         for (Warp warp : reachableWarps) {
             if (warp == closestWarp) {
-                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, warpLineHighlightParticle);
+                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, true);
 
                 String message = ChatColor.RED + "Sneak to warp to " + ChatColor.LIGHT_PURPLE + warp.label;
                 player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
             } else {
-                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, warpLineParticle);
+                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, false);
             }
         }
     }
@@ -409,8 +498,11 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
      * @param world The world the warp is in
      * @param origin The origin (source location)
      * @param warp The warp (destination location)
+     * @param highlighted Whether to draw the warp's highlight particle color, or the default.
      */
-    private static void renderWarpLine(World world, Location origin, Warp warp, Particle.DustOptions dustOptions) {
+    private static void renderWarpLine(World world, Location origin, Warp warp, boolean highlighted) {
+        final Particle.DustOptions dustOptions = highlighted ? warp.highlightColor : Warp.particle;
+
         // https://bukkit.org/threads/making-a-particle-line-from-point-1-to-point-2.465415/#post-3558666
         final float gap = 1f;
         final int maxIterations = Config.warpLineIterationCount;
