@@ -66,7 +66,7 @@ public class WarpData {
             String str = Long.toString(authorUUID.getMostSignificantBits(), 36) + "," + Long.toString(authorUUID.getLeastSignificantBits(), 36);
 
             // Append position
-            str += Integer.toString(x, 36) + "," + Integer.toString(y, 36) + "," + Integer.toString(z, 36);
+            str += "," + Integer.toString(x, 36) + "," + Integer.toString(y, 36) + "," + Integer.toString(z, 36);
 
             // Append label (sanitized)
             str += "," + StringUtils.replaceChars(label, "\n\r,", "  _");
@@ -106,6 +106,8 @@ public class WarpData {
             if (components.length > 7) {
                 warp.labelColor = ChatColor.getByChar(components[7]);
             }
+
+            return warp;
         }
 
         public BlockVector getVector() {
