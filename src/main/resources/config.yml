@@ -1,0 +1,13 @@
+# How often the decorative particles around warp pads are spawned, in server ticks.
+warpDecorationUpdateRate: 5
+
+# How close to a warp at least one player must be, in order for decorative particles to spawn near a warp pad, in
+# blocks.
+warpDecorationVisibilityDistance: 25
+
+# How many particles are spawned, whenever a player is standing on a warp pad, pointing in the general direction of
+# other reachable warp pads, per warp pad.
+warpLineIterationCount: 5
+
+# Circular radius in blocks, from one T1 warp, that other warps may be reached. Must not be greater than 46340.
+warpPadT1Range: 1000

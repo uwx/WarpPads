@@ -32,10 +32,10 @@ public class WarpData {
     public final Set<Player> playersStandingOnWarps = new HashSet<>();
 
     public static class Warp {
-        public int x;
-        public int y;
-        public int z;
-        public String label;
+        public final int x;
+        public final int y;
+        public final int z;
+        public final String label;
 
         public Warp(int x, int y, int z, String label) {
             this.x = x;

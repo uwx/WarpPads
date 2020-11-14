@@ -8,3 +8,11 @@ website: ${url}
 main: ${mainClass}
 
 permissions: {}
+
+commands:
+  warppads:
+    description: The global configuration command for Warp Pads. Use /wp help to see help for Warp Pads' subcommands.
+    aliases: [wp, warp]
+    usage: "Usage: /<command> [help|reload|clear [world]|give]"
+    permission: minecraft.command.stop
+    permission-message: Only server operators may use this command.

@@ -1,5 +1,7 @@
 package raytech.warppads;
 
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
@@ -8,18 +10,20 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.BlockVector;
-import org.bukkit.util.NumberConversions;
 import org.bukkit.util.Vector;
 import raytech.warppads.WarpData.Warp;
 
@@ -27,18 +31,25 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
-public class SpigotPlugin extends JavaPlugin implements Listener {
-    private final Map<World, WarpData> warpDataMap = new HashMap<>();
-    private final Object warpDataWriteSynchronizationHandle = new Object();
-    private CustomItem warpPad;
+public final class SpigotPlugin extends JavaPlugin implements Listener {
+    public final Map<World, WarpData> warpDataMap = new HashMap<>();
+    private final Object warpDataFileMutex = new Object();
+    private final List<Integer> runningSchedulers = new ArrayList<>();
 
-    public static final Particle.DustOptions warpLineParticle = new Particle.DustOptions(Color.PURPLE, 1);
+    private final List<CustomItem> customItemCache = new ArrayList<>();
+    public CustomItem warpPadT1;
+
+    public static final Particle.DustOptions warpLineParticle = new Particle.DustOptions(Color.RED, 1);
+    public static final Particle.DustOptions warpLineHighlightParticle = new Particle.DustOptions(Color.PURPLE, 1);
 
     @Override
     public void onLoad() {
@@ -48,10 +59,16 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
     @SuppressWarnings("unchecked")
     @Override
     public void onEnable() {
-        warpPad = createItem(
+        warpPadT1 = createItem(
                 ChatColor.LIGHT_PURPLE + "Warp Pad - Tier 1",
                 "warp_pad_tier_1",
-                () -> new ItemStack(Material.STICK),
+                420001,
+                Material.IRON_NUGGET,
+                def -> def.withLore(
+                        "Right-click to place a warp pad.",
+                        "Rename this item in an anvil to set its label.",
+                        "Two warp pads of this type, within 1000 blocks of",
+                        "each other, can be teleported between."),
                 recipe -> recipe
                         .shape(
                                 " q ",
@@ -63,16 +80,13 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
                         .setIngredient('a', Material.GOLDEN_APPLE)
         );
 
+        Config.loadConfig(this);
+
         reloadWarps();
 
-        // Run scheduler for drawing particles near players standing on warp pads
-        getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
-            warpDataMap.forEach((world, warpData) -> {
-                for (Player player : warpData.playersStandingOnWarps) {
-                    renderWarps(warpData, player);
-                }
-            });
-        }, 300L, 300L);
+        runSchedulers();
+
+        Objects.requireNonNull(this.getCommand("warppads")).setExecutor(new CommandWarpPads(this));
 
         // Register our own event hooks
         getServer().getPluginManager().registerEvents(this, this);
@@ -92,17 +106,60 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    public CustomItem createItem(String displayName, String unlocalizedName, Supplier<ItemStack> createItem, Consumer<ShapedRecipe>... recipes) {
-        ItemStack item = createItem.get();
+    /**
+     * Clears previously-running schedulers and runs schedulers for particle rendering.
+     */
+    public void runSchedulers() {
+        // Clear all previously running schedulers
+        for (Integer runningScheduler : runningSchedulers) {
+            getServer().getScheduler().cancelTask(runningScheduler);
+        }
+        runningSchedulers.clear();
+
+        // Run scheduler for drawing particles near players standing on warp pads
+        runningSchedulers.add(getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            warpDataMap.forEach((world, warpData) -> {
+                for (Player player : warpData.playersStandingOnWarps) {
+                    renderWarps(warpData, player);
+                }
+            });
+        }, 5L, 5L));
+
+        // Run scheduler for drawing particles over warp pads
+        Random random = new Random();
+        runningSchedulers.add(getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            int rgb = random.nextInt();
+            Particle.DustOptions particleColor = new Particle.DustOptions(Color.fromRGB(rgb & 0x00FFFFFF), 1);
+
+            warpDataMap.forEach((world, warpData) -> {
+                for (Warp warp : warpData.warps.values()) {
+                    if (!world.isChunkLoaded(warp.x >> 4, warp.z >> 4) || !WorldUtil.hasNearbyPlayers(world, warp.x, warp.y, warp.z, Config.warpDecorationVisibilityDistance)) {
+                        continue;
+                    }
+
+                    //getLogger().info("Loading particle");
+
+                    world.spawnParticle(Particle.REDSTONE, warp.x + 0.5, warp.y + 0.5, warp.z + 0.5, 10, 0.5, 0.5, 0.5, 1, particleColor);
+                }
+            });
+        }, Config.warpDecorationUpdateRate, Config.warpDecorationUpdateRate));
+    }
+
+    public CustomItem createItem(String displayName, String unlocalizedName, int modelId, Material material, Consumer<CustomItemDefinition> createItem, Consumer<ShapedRecipe>... createRecipes) {
+        ItemStack item = new ItemStack(material);
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
         meta.setDisplayName(displayName);
         meta.setLocalizedName(unlocalizedName); // Will be hidden from player but not changeable
+        meta.setCustomModelData(modelId);
+        createItem.accept(new CustomItemDefinition(item, meta));
         item.setItemMeta(meta);
 
+        List<ShapedRecipe> recipes = new ArrayList<>();
         int recipeIndex = 0;
-        for (Consumer<ShapedRecipe> recipeConsumer : recipes) {
+        for (Consumer<ShapedRecipe> recipeConsumer : createRecipes) {
             NamespacedKey key = new NamespacedKey(this, unlocalizedName + (recipeIndex == 0 ? "" : "_" + recipeIndex));
             ShapedRecipe recipe = new ShapedRecipe(key, item);
+            recipes.add(recipe);
 
             recipeConsumer.accept(recipe);
             Bukkit.addRecipe(recipe);
@@ -110,45 +167,112 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
             recipeIndex++;
         }
 
-        return new CustomItem(item, displayName, unlocalizedName);
+        CustomItem customItem = new CustomItem(item, displayName, unlocalizedName, recipes);
+        customItemCache.add(customItem);
+        return customItem;
+    }
+
+    /**
+     * Adds all custom item recipes to the player's recipe book upon join.
+     */
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        for (CustomItem customItem : customItemCache) {
+            for (ShapedRecipe recipe : customItem.recipes) {
+                event.getPlayer().discoverRecipe(recipe.getKey());
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerUse(PlayerInteractEvent event){
         Player player = event.getPlayer();
 
-        if (warpPad.matches(player.getInventory().getItemInMainHand())) {
+        ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+        if (warpPadT1.matches(mainHandItem)) {
+            event.setCancelled(true);
+
+            if (event.getClickedBlock() == null) {
+                return;
+            }
+
+            int placeX = event.getClickedBlock().getX() + event.getBlockFace().getModX();
+            int placeY = event.getClickedBlock().getY() + event.getBlockFace().getModY();
+            int placeZ = event.getClickedBlock().getZ() + event.getBlockFace().getModZ();
+            String label = mainHandItem.getItemMeta().getDisplayName();
+
+            Block blockAtLocation = player.getWorld().getBlockAt(placeX, placeY, placeZ);
+            if (!blockAtLocation.isEmpty() && !blockAtLocation.isLiquid() && blockAtLocation.getType() != Material.GRASS) {
+                return;
+            }
+
             WarpData worldWarpData = warpDataMap.get(player.getWorld());
             if (worldWarpData == null) {
                 worldWarpData = new WarpData();
                 warpDataMap.put(player.getWorld(), worldWarpData);
             }
 
-            int placeX = event.getClickedBlock().getX() + event.getBlockFace().getModX();
-            int placeY = event.getClickedBlock().getY() + event.getBlockFace().getModY();
-            int placeZ = event.getClickedBlock().getZ() + event.getBlockFace().getModZ();
-            String label = player.getInventory().getItemInMainHand().getItemMeta().getDisplayName();
-
             Warp warp = new Warp(placeX, placeY, placeZ, label);
             worldWarpData.warps.put(new BlockVector(placeX, placeY, placeZ), warp);
 
             // Save all warps to the warpdata.txt file in the world directory.
-            Map<BlockVector, Warp> copyOfWarps = worldWarpData.warps;
-            getServer().getScheduler().runTaskAsynchronously(this, () -> {
-                synchronized (warpDataWriteSynchronizationHandle) {
-                    File warpdataFile = new File(getServer().getWorldContainer().getAbsolutePath(), player.getWorld().getName() + "/warpdata.txt");
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(warpdataFile))) {
-                        for (Warp warpToSave : copyOfWarps.values()) {
-                            writer.write(warpToSave.save() + "\n");
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
+            saveWarpsToFile(player.getWorld());
 
-            player.getWorld().getBlockAt(placeX, placeY, placeZ).setType(Material.SMOOTH_STONE_SLAB);
+            mainHandItem.setAmount(mainHandItem.getAmount() - 1);
+            player.getInventory().setItemInMainHand(mainHandItem.getAmount() != 0 ? mainHandItem : null);
+            blockAtLocation.setType(Material.QUARTZ_SLAB);
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        WarpData warpData = warpDataMap.get(event.getBlock().getWorld());
+        if (warpData == null) {
+            return;
+        }
+
+        int blockX = event.getBlock().getX();
+        int blockY = event.getBlock().getY();
+        int blockZ = event.getBlock().getZ();
+        Warp removedWarp = warpData.warps.remove(new BlockVector(blockX, blockY, blockZ));
+        if (removedWarp == null) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        ItemStack item = warpPadT1.get();
+        ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
+        meta.setDisplayName(removedWarp.label);
+        item.setItemMeta(meta);
+
+        event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), item);
+
+        saveWarpsToFile(event.getPlayer().getWorld());
+    }
+
+    /**
+     * Asynchronously save all warps for a given world to the warpdata.txt file in the world directory.
+     * @param world The world whose warps to save
+     */
+    public void saveWarpsToFile(World world) {
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            synchronized (warpDataFileMutex) {
+                WarpData warpData = warpDataMap.get(world);
+                if (warpData == null) {
+                    return;
+                }
+
+                File warpdataFile = new File(getServer().getWorldContainer().getAbsolutePath(), world.getName() + "/warpdata.txt");
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(warpdataFile))) {
+                    for (Warp warpToSave : warpData.warps.values()) {
+                        writer.write(warpToSave.save() + "\n");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -160,11 +284,15 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
         }
 
         Location location = player.getLocation();
-        int playerX = (int) location.getX();
-        int playerY = (int) location.getY();
-        int playerZ = (int) location.getZ();
+        int x = (int) location.getBlock().getX();
+        int y = (int) location.getBlock().getY();
+        int z = (int) location.getBlock().getZ();
 
-        Warp warp = warpData.warps.get(new BlockVector(playerX, playerY, playerZ));
+        /*if (x < 0) x -= 1;
+        if (y < 0) y -= 1;
+        if (z < 0) z -= 1;*/
+
+        Warp warp = warpData.warps.get(new BlockVector(x, y, z));
         if (warp == null) {
             warpData.playersStandingOnWarps.remove(player);
         } else {
@@ -183,12 +311,48 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
         int playerY = (int) location.getY();
         int playerZ = (int) location.getZ();
 
-        final int squared1024 = 1024 * 1024;
+        // To avoid getting the square root of distances, we do all the
+        final int squaredDistLimit = Config.warpPadT1Range * Config.warpPadT1Range;
+
+        Vector headDirection = location.getDirection();
+
+        // Highlighted warp (line is closest to player's head) and angle distance score (lower is better)
+        float shortestDistance = Float.MAX_VALUE;
+        Warp closestWarp = null;
+
+        // List of warps within teleport range
+        List<Warp> reachableWarps = new LinkedList<>();
 
         for (Warp warp : warpData.warps.values()) {
-            double distanceSquared = NumberConversions.square(playerX - warp.x) + NumberConversions.square(playerY - warp.y) + NumberConversions.square(playerZ - warp.z);
-            if (distanceSquared <= squared1024) {
-                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp);
+            double distanceSquared = VectorUtil.distanceSquared(playerX, playerY, playerZ, warp.x, warp.y, warp.z);
+
+            if (distanceSquared <= squaredDistLimit) {
+                float angleDistance = VectorUtil.subtractNormalizeDistanceSquared(
+                        // warp (destination)
+                        warp.x + 0.5, warp.y + 1.5, warp.z + 0.5,
+                        // player location (origin)
+                        location.getX(), location.getY(), location.getZ(),
+                        // head direction (to compare against)
+                        headDirection.getX(), headDirection.getY(), headDirection.getZ()
+                );
+
+                if (angleDistance < shortestDistance) {
+                    shortestDistance = angleDistance;
+                    closestWarp = warp;
+                }
+
+                reachableWarps.add(warp);
+            }
+        }
+
+        for (Warp warp : reachableWarps) {
+            if (warp == closestWarp) {
+                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, warpLineHighlightParticle);
+
+                String message = ChatColor.RED + "Sneak to warp to " + ChatColor.LIGHT_PURPLE + warp.label;
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
+            } else {
+                renderWarpLine(player.getWorld(), player.getEyeLocation(), warp, warpLineParticle);
             }
         }
     }
@@ -199,10 +363,10 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
      * @param origin The origin (source location)
      * @param warp The warp (destination location)
      */
-    private static void renderWarpLine(World world, Location origin, Warp warp) {
+    private static void renderWarpLine(World world, Location origin, Warp warp, Particle.DustOptions dustOptions) {
         // https://bukkit.org/threads/making-a-particle-line-from-point-1-to-point-2.465415/#post-3558666
         final float gap = 1f;
-        final int maxIterations = 5;
+        final int maxIterations = Config.warpLineIterationCount;
 
         Vector originVector = origin.toVector();
         Vector destinationVector = new Vector(warp.x + 0.5, warp.y + 1.5, warp.z + 0.5); // At eye height, centered in block
@@ -214,7 +378,7 @@ public class SpigotPlugin extends JavaPlugin implements Listener {
 
         float currentStep = 0;
         for (int i = 0; i < maxIterations && currentStep < totalDistance; i++) {
-            world.spawnParticle(Particle.REDSTONE, originVector.getX(), originVector.getY(), originVector.getZ(), 1, warpLineParticle);
+            world.spawnParticle(Particle.REDSTONE, originVector.getX(), originVector.getY(), originVector.getZ(), 1, dustOptions);
             originVector.add(step);
             currentStep += gap;
         }
