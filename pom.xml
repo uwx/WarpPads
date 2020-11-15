@@ -10,7 +10,7 @@
     <!-- Name, Description, and URL are used in plugin.yml -->
     <name>WarpPads</name>
     <description>Fancy vanilla-style teletransportation!</description>
-    <url>https://github.com/uwx/WoodDropFix</url>
+    <url>https://github.com/uwx/WarpPads</url>
 
     <licenses>
         <license>
