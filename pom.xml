@@ -9,7 +9,7 @@
     <!-- Plugin Information -->
     <!-- Name, Description, and URL are used in plugin.yml -->
     <name>WarpPads</name>
-    <description>Replaces wood block drops with logs</description>
+    <description>Fancy vanilla-style teletransportation!</description>
     <url>https://github.com/uwx/WoodDropFix</url>
 
     <licenses>
