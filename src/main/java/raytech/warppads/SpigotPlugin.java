@@ -47,7 +47,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
     private final List<Integer> runningSchedulers = new ArrayList<>();
 
     private final List<CustomItem> customItemCache = new ArrayList<>();
-    public CustomItem warpPadT1;
+    public Pair<CustomItem, WarpTier>[] warpPads;
 
     @Override
     public void onLoad() {
@@ -57,36 +57,35 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
     @SuppressWarnings("unchecked")
     @Override
     public void onEnable() {
-        warpPadT1 = createItem(
-                ChatColor.LIGHT_PURPLE + "Warp Pad - Tier 1",
-                "warp_pad_tier_1",
-                420001,
-                Material.IRON_NUGGET,
-                def -> def.withLore(
-                        "Right-click to place a warp pad.",
-                        "Rename this item in an anvil to set its label.",
-                        "Two warp pads of this type, within 1000 blocks of",
-                        "each other, can be teleported between.",
-                        "",
-                        "Right-click the pad with a dye in hand to color",
-                        "its label. Right-click with a bucket of water to",
-                        "restore the default label. Dyes will not be",
-                        "consumed.",
-                        "",
-                        "Right-click the pad with a diamond to mark it as",
-                        "private. It will be only accessible to you and",
-                        "players you grant access to with /warpallow. You",
-                        "may disallow access with /warpdeny."),
-                recipe -> recipe
-                        .shape(
-                                " q ",
-                                "qgq",
-                                "aq "
-                        )
-                        .setIngredient('q', Material.QUARTZ)
-                        .setIngredient('g', Material.GOLD_BLOCK)
-                        .setIngredient('a', Material.GOLDEN_APPLE)
-        );
+        List<Pair<CustomItem, WarpTier>> warpPadsList = new ArrayList<>();
+        for (WarpTier tier : WarpTier.values()) {
+            warpPadsList.add(Pair.of(
+                    createItem(
+                            ChatColor.LIGHT_PURPLE + "Warp Pad - Tier " + tier.tierName,
+                            "warp_pad_tier_" + tier.tierName,
+                            420001 + tier.id, // 0-indexed
+                            Material.IRON_NUGGET,
+                            def -> def.withLore(
+                                    "Right-click to place a warp pad.",
+                                    "Rename this item in an anvil to set its label.",
+                                    "Two warp pads of this type, within " + tier.range + " blocks of",
+                                    "each other, can be teleported between.",
+                                    "",
+                                    "Right-click the pad with a dye in hand to color",
+                                    "its label. Right-click with a bucket of water to",
+                                    "restore the default label. Dyes will not be",
+                                    "consumed.",
+                                    "",
+                                    "Right-click the pad with a diamond to mark it as",
+                                    "private. It will be only accessible to you and",
+                                    "players you grant access to with /warpallow. You",
+                                    "may disallow access with /warpdeny."),
+                            tier::buildRecipe
+                    ),
+                    tier
+            ));
+        }
+        this.warpPads = warpPadsList.toArray(new Pair[0]);
 
         Config.loadConfig(this);
 
@@ -174,7 +173,8 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }, Config.warpDecorationUpdateRate, Config.warpDecorationUpdateRate));
     }
 
-    public CustomItem createItem(String displayName, String unlocalizedName, int modelId, Material material, Consumer<CustomItemDefinition> createItem, Consumer<ShapedRecipe>... createRecipes) {
+    @SafeVarargs
+    public final CustomItem createItem(String displayName, String unlocalizedName, int modelId, Material material, Consumer<CustomItemDefinition> createItem, Consumer<ShapedRecipe>... createRecipes) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
         meta.setDisplayName(displayName);
@@ -285,14 +285,18 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }
 
         // Place new warp pad
-        if (warpPadT1.matches(mainHandItem)) {
+        for (Pair<CustomItem, WarpTier> warpPad : warpPads) {
+            if (!warpPad.left.matches(mainHandItem)) {
+                continue;
+            }
+
             event.setCancelled(true);
 
             if (event.getClickedBlock() == null) {
                 return;
             }
 
-            placeWarpPadT1(event);
+            placeWarpPad(event, warpPad.right);
             return;
         }
     }
@@ -342,7 +346,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         warp.labelColor = chatColor;
     }
 
-    private void placeWarpPadT1(PlayerInteractEvent event) {
+    private void placeWarpPad(PlayerInteractEvent event, WarpTier tier) {
         Player player = event.getPlayer();
         ItemStack mainHandItem = player.getInventory().getItemInMainHand();
 
@@ -361,14 +365,14 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        warps.add(player.getWorld(), new Warp(player.getUniqueId(), placeX, placeY, placeZ, label));
+        warps.add(player.getWorld(), new Warp(tier, player.getUniqueId(), placeX, placeY, placeZ, label));
 
         // Save all warps to the warpdata.txt file in the world directory.
         saveWarpsToFile(player.getWorld());
 
         mainHandItem.setAmount(mainHandItem.getAmount() - 1);
         player.getInventory().setItemInMainHand(mainHandItem.getAmount() != 0 ? mainHandItem : null);
-        blockAtLocation.setType(Material.QUARTZ_SLAB);
+        blockAtLocation.setType(tier.displayBlock);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -383,7 +387,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         event.setDropItems(false);
 
-        ItemStack item = warpPadT1.get();
+        ItemStack item = warpPads[removedWarp.tier.id].left.get();
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
         meta.setDisplayName(removedWarp.labelColor + removedWarp.label);
         item.setItemMeta(meta);
@@ -444,11 +448,12 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
-            if (warpData.getWarpUnderPlayer(player) == null) {
+            Warp warpUnderPlayer = warpData.getWarpUnderPlayer(player);
+            if (warpUnderPlayer == null) {
                 return;
             }
 
-            Warp warp = getClosestWarp(player, warpData, null);
+            Warp warp = getClosestWarp(player, warpUnderPlayer, warpData, null);
 
             Location eyeLocation = player.getEyeLocation();
             player.teleport(new Location(event.getPlayer().getWorld(), warp.x + 0.5, warp.y + 0.5, warp.z + 0.5, eyeLocation.getYaw(), eyeLocation.getPitch()), TeleportCause.PLUGIN);
@@ -464,7 +469,12 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         // List of warps within teleport range
         List<Warp> reachableWarps = new LinkedList<>();
 
-        Warp closestWarp = getClosestWarp(player, warpData, reachableWarps);
+        Warp warpUnderPlayer = warpData.getWarpUnderPlayer(player);
+        if (warpUnderPlayer == null) {
+            return;
+        }
+
+        Warp closestWarp = getClosestWarp(player, warpUnderPlayer, warpData, reachableWarps);
 
         for (Warp warp : reachableWarps) {
             if (warp == closestWarp) {
@@ -486,12 +496,13 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
      * reachable warps from the player's location.
      *
      * @param player The player to compute warps from
+     * @param warpUnderPlayer
      * @param warpData The warp data for the player's world
      * @param reachableWarps A list to fill with all warps reachable by the player
      * @return The closest warp to the player's head direction, or {@code null} if there are no warps reachable by the
      *         player
      */
-    private Warp getClosestWarp(Player player, WarpData warpData, List<Warp> reachableWarps) {
+    private Warp getClosestWarp(Player player, Warp warpUnderPlayer, WarpData warpData, List<Warp> reachableWarps) {
         Location location = player.getLocation();
         double playerX = location.getX();
         double playerY = location.getY();
@@ -502,7 +513,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         Vector headDirection = location.getDirection();
 
         // To avoid getting the square root of distances, we do all the math in squared numbers
-        final int squaredDistLimit = Config.warpPadT1Range * Config.warpPadT1Range;
+        final int squaredDistLimit = warpUnderPlayer.tier.range * warpUnderPlayer.tier.range;
         final int squaredDistMinimum = 3 * 3;
 
         // Highlighted warp (line is closest to player's head) and angle distance score (lower is better)

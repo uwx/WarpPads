@@ -32,11 +32,6 @@ public final class Config {
      * other reachable warp pads, per warp pad.
      */
     public static int warpLineIterationCount = 5;
-
-    /**
-     * Circular radius in blocks, from one T1 warp, that other warps may be reached. Must not be greater than 46340.
-     */
-    public static int warpPadT1Range = 1000;
     //endregion
 
     public static void loadConfig(SpigotPlugin plugin) {

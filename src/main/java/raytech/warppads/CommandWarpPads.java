@@ -125,7 +125,7 @@ public class CommandWarpPads implements CommandExecutor {
                     return false;
                 }
 
-                ((Player)sender).getInventory().addItem(plugin.warpPadT1.getStackOf(64));
+                ((Player)sender).getInventory().addItem(plugin.warpPads[0].left.getStackOf(64));
                 return false;
             }
         }

@@ -43,6 +43,7 @@ public class WarpData {
         public static final Particle.DustOptions highlightParticle = new Particle.DustOptions(Color.PURPLE, 1);
         public static final ChatColor defaultLabelColor = ChatColor.LIGHT_PURPLE;
 
+        public final WarpTier tier;
         public final UUID authorUUID;
         public final int x;
         public final int y;
@@ -52,7 +53,8 @@ public class WarpData {
         public Particle.DustOptions highlightColor = highlightParticle;
         public ChatColor labelColor = defaultLabelColor;
 
-        public Warp(UUID authorUUID, int x, int y, int z, String label) {
+        public Warp(WarpTier tier, UUID authorUUID, int x, int y, int z, String label) {
+            this.tier = tier;
             this.authorUUID = authorUUID;
             this.x = x;
             this.y = y;
@@ -65,8 +67,11 @@ public class WarpData {
          * @return The serialized string
          */
         public String save() {
-            // Append UUID
-            String str = Long.toString(authorUUID.getMostSignificantBits(), 36) + "," + Long.toString(authorUUID.getLeastSignificantBits(), 36);
+            // Append tier
+            String str = Integer.toString(tier.id, 36);
+
+            // Append author UUID
+            str += "," + Long.toString(authorUUID.getMostSignificantBits(), 36) + "," + Long.toString(authorUUID.getLeastSignificantBits(), 36);
 
             // Append position
             str += "," + Integer.toString(x, 36) + "," + Integer.toString(y, 36) + "," + Integer.toString(z, 36);
@@ -98,6 +103,7 @@ public class WarpData {
             String[] components = StringUtils.split(str, ',');
 
             Warp warp = new Warp(
+                    WarpTier.of(Integer.parseInt(components[0], 36)),
                     new UUID(Long.parseLong(components[0], 36), Long.parseLong(components[1], 36)),
                     Integer.parseInt(components[2], 36),
                     Integer.parseInt(components[3], 36),
