@@ -513,7 +513,8 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         Vector headDirection = location.getDirection();
 
         // To avoid getting the square root of distances, we do all the math in squared numbers
-        final int squaredDistLimit = warpUnderPlayer.tier.range * warpUnderPlayer.tier.range;
+        final int squaredDistLimit
+                = warpUnderPlayer.tier.range == -1 ? -1 : warpUnderPlayer.tier.range * warpUnderPlayer.tier.range;
         final int squaredDistMinimum = 3 * 3;
 
         // Highlighted warp (line is closest to player's head) and angle distance score (lower is better)
@@ -528,7 +529,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
             double distanceSquared = VectorUtil.distanceSquared(playerX, playerY, playerZ, warp.x, warp.y, warp.z);
 
-            if (distanceSquared < squaredDistMinimum || distanceSquared > squaredDistLimit) {
+            if (distanceSquared < squaredDistMinimum || (squaredDistLimit != -1 && distanceSquared > squaredDistLimit)) {
                 continue;
             }
 
