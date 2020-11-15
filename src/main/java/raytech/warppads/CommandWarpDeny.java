@@ -39,6 +39,11 @@ public class CommandWarpDeny implements CommandExecutor {
             return false;
         }
 
+        if (guest.getUniqueId().equals(((Player)sender).getUniqueId())) {
+            sender.sendMessage(ChatColor.RED + "Cannot remove yourself from whitelist");
+            return false;
+        }
+
         accessList.remove(((Player)sender).getUniqueId(), guest.getUniqueId());
         plugin.saveAccessList();
         return false;

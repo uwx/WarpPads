@@ -39,6 +39,11 @@ public class CommandWarpAllow implements CommandExecutor {
             return false;
         }
 
+        if (guest.getUniqueId().equals(((Player)sender).getUniqueId())) {
+            sender.sendMessage(ChatColor.RED + "Cannot whitelist yourself");
+            return false;
+        }
+
         accessList.add(((Player)sender).getUniqueId(), guest.getUniqueId());
         plugin.saveAccessList();
         return false;
