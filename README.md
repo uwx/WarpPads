@@ -4,7 +4,7 @@ A teletransportation plugin for [Spigot](https://www.spigotmc.org/). Remake of [
 
 ![Warp Pads Demo GIF 1](https://i.imgur.com/vLwdrmH.gif "Warp Pads Demo GIF 1")
 
-![Warp Pads Demo GIF 2](https://i.imgur.com/llWJT0M.gif "Warp Pads Demo GIF 2")
+![Warp Pads Demo GIF 2](https://i.imgur.com/fwrORns.gif "Warp Pads Demo GIF 2")
 
 Plugin template from [sgrayme/SpigotPlugin](https://github.com/sgrayme/SpigotPlugin)
 
