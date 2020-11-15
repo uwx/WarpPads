@@ -385,7 +385,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         ItemStack item = warpPadT1.get();
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
-        meta.setDisplayName(removedWarp.label);
+        meta.setDisplayName(removedWarp.labelColor + removedWarp.label);
         item.setItemMeta(meta);
 
         event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), item);
