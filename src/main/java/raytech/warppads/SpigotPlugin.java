@@ -450,7 +450,8 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
             Warp warp = getClosestWarp(player, warpData, null);
 
-            player.teleport(new Location(event.getPlayer().getWorld(), warp.x + 0.5, warp.y + 0.5, warp.z + 0.5), TeleportCause.PLUGIN);
+            Location eyeLocation = player.getEyeLocation();
+            player.teleport(new Location(event.getPlayer().getWorld(), warp.x + 0.5, warp.y + 0.5, warp.z + 0.5, eyeLocation.getYaw(), eyeLocation.getPitch()), TeleportCause.PLUGIN);
         }
     }
 
