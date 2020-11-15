@@ -17,5 +17,5 @@ The plugin currently has to be compiled manually with `mvn package`.
 All the recipes have recipe book entries, so you can refer to those if in doubt.
 
 * Make a Warp Pad. The most basic one, Tier 1, can be made out of a Block of Gold, 4 Nether Quartz, and a Golden Apple.
-  It has a max teleport circular range of 500 blocks.
+  It has a max teleport circular range of 500 blocks. 
   ![Tier 1 Crafting Demo](https://i.imgur.com/NMw49Ur.png "Tier 1 Crafting Demo")
