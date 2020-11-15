@@ -10,7 +10,8 @@ Plugin template from [sgrayme/SpigotPlugin](https://github.com/sgrayme/SpigotPlu
 
 ## Installation
 
-The plugin currently has to be compiled manually with `mvn package`.
+The plugin currently has to be compiled manually with `mvn package`. The resouce pack (`Warp Pads Resource Pack.zip`)
+must be installed on the server (or the clients), otherwise warp pad items will show up as black and blue checkerboards.
 
 ## Usage
 
@@ -66,3 +67,8 @@ Tier 3: Has an unlimited range. Crafted using a Block of Netherite, 4 Ender Pear
 All Warp Pads from tiers 1 to 3, side-by-side
 
 ![All Warp Pads from tiers 1 to 3, side-by-side](https://i.imgur.com/axIE0i4.png "All Warp Pads from tiers 1 to 3, side-by-side")
+
+## License
+
+As with the original Warp Pads, the code is licensed under the GPL v3. The bundled resource pack must respect the terms
+of the ProjectE license, which is MIT.
