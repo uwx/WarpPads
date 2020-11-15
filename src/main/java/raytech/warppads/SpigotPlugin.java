@@ -68,7 +68,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                             def -> def.withLore(
                                     "Right-click to place a warp pad.",
                                     "Rename this item in an anvil to set its label.",
-                                    "Two warp pads of this type, within " + tier.range + " blocks of",
+                                    "Two warp pads of this type, within " + (tier.range != -1 ? tier.range : "unlimited") + " blocks of",
                                     "each other, can be teleported between.",
                                     "",
                                     "Right-click the pad with a dye in hand to color",
