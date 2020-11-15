@@ -104,21 +104,21 @@ public class WarpData {
 
             Warp warp = new Warp(
                     WarpTier.of(Integer.parseInt(components[0], 36)),
-                    new UUID(Long.parseLong(components[0], 36), Long.parseLong(components[1], 36)),
-                    Integer.parseInt(components[2], 36),
+                    new UUID(Long.parseLong(components[1], 36), Long.parseLong(components[2], 36)),
                     Integer.parseInt(components[3], 36),
                     Integer.parseInt(components[4], 36),
-                    components[5]
+                    Integer.parseInt(components[5], 36),
+                    components[6]
             );
 
-            warp.isPrivate = !components[6].equals("0");
-
-            if (components.length > 7) {
-                warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[7], 36)), 1);
-            }
+            warp.isPrivate = !components[7].equals("0");
 
             if (components.length > 8) {
-                warp.labelColor = ChatColor.getByChar(components[8]);
+                warp.highlightColor = new Particle.DustOptions(Color.fromRGB(Integer.parseInt(components[8], 36)), 1);
+            }
+
+            if (components.length > 9) {
+                warp.labelColor = ChatColor.getByChar(components[9]);
             }
 
             return warp;
