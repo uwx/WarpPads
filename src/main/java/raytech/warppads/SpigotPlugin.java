@@ -6,7 +6,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -17,16 +16,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 import raytech.warppads.WarpData.Warp;
+import raytech.warppads.customitemlib.CustomItem.CustomItemData;
+import raytech.warppads.customitemlib.CustomItemManager;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -37,17 +36,16 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
-import java.util.function.Consumer;
 
 public final class SpigotPlugin extends JavaPlugin implements Listener {
     public final GlobalWarps warps = new GlobalWarps();
     private final AccessList accessList = new AccessList();
+    private CustomItemManager itemManager;
 
     private final Object warpDataFileMutex = new Object();
     private final List<Integer> runningSchedulers = new ArrayList<>();
 
-    private final List<CustomItem> customItemCache = new ArrayList<>();
-    public Pair<CustomItem, WarpTier>[] warpPads;
+    public CustomItemData<WarpTier>[] warpPads;
 
     @Override
     public void onLoad() {
@@ -57,35 +55,34 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
     @SuppressWarnings("unchecked")
     @Override
     public void onEnable() {
-        List<Pair<CustomItem, WarpTier>> warpPadsList = new ArrayList<>();
+        itemManager = new CustomItemManager(this);
+
+        List<CustomItemData<WarpTier>> warpPadsList = new ArrayList<>();
         for (WarpTier tier : WarpTier.values()) {
-            warpPadsList.add(Pair.of(
-                    createItem(
-                            ChatColor.LIGHT_PURPLE + "Warp Pad - Tier " + tier.tierName,
-                            "warp_pad_tier_" + tier.tierName,
-                            420001 + tier.id, // 0-indexed
-                            Material.IRON_NUGGET,
-                            def -> def.withLore(
-                                    "Right-click to place a warp pad.",
-                                    "Rename this item in an anvil to set its label.",
-                                    "Two warp pads of this type, within " + (tier.range != -1 ? tier.range : "unlimited") + " blocks of",
-                                    "each other, can be teleported between.",
-                                    "",
-                                    "Right-click the pad with a dye in hand to color",
-                                    "its label. Right-click with a bucket of water to",
-                                    "restore the default label. Dyes will not be",
-                                    "consumed.",
-                                    "",
-                                    "Right-click the pad with a diamond to mark it as",
-                                    "private. It will be only accessible to you and",
-                                    "players you grant access to with /warpallow. You",
-                                    "may disallow access with /warpdeny."),
-                            tier::buildRecipe
-                    ),
-                    tier
-            ));
+            warpPadsList.add(itemManager.createItem(
+                    ChatColor.LIGHT_PURPLE + "Warp Pad - Tier " + tier.tierName,
+                    "warp_pad_tier_" + tier.tierName,
+                    420001 + tier.id, // 0-indexed
+                    Material.IRON_NUGGET,
+                    def -> def.withLore(
+                            "Right-click to place a warp pad.",
+                            "Rename this item in an anvil to set its label.",
+                            "Two warp pads of this type, within " + (tier.range != -1 ? tier.range : "unlimited") + " blocks of",
+                            "each other, can be teleported between.",
+                            "",
+                            "Right-click the pad with a dye in hand to color",
+                            "its label. Right-click with a bucket of water to",
+                            "restore the default label. Dyes will not be",
+                            "consumed.",
+                            "",
+                            "Right-click the pad with a diamond to mark it as",
+                            "private. It will be only accessible to you and",
+                            "players you grant access to with /warpallow. You",
+                            "may disallow access with /warpdeny."),
+                    tier::buildRecipe
+            ).attachData(tier));
         }
-        this.warpPads = warpPadsList.toArray(new Pair[0]);
+        this.warpPads = warpPadsList.toArray(new CustomItemData[0]);
 
         Config.loadConfig(this);
 
@@ -173,46 +170,6 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }, Config.warpDecorationUpdateRate, Config.warpDecorationUpdateRate));
     }
 
-    @SafeVarargs
-    public final CustomItem createItem(String displayName, String unlocalizedName, int modelId, Material material, Consumer<CustomItemDefinition> createItem, Consumer<ShapedRecipe>... createRecipes) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
-        meta.setDisplayName(displayName);
-        meta.setLocalizedName(unlocalizedName); // Will be hidden from player but not changeable
-        meta.setCustomModelData(modelId);
-        createItem.accept(new CustomItemDefinition(item, meta));
-        item.setItemMeta(meta);
-
-        List<ShapedRecipe> recipes = new ArrayList<>();
-        int recipeIndex = 0;
-        for (Consumer<ShapedRecipe> recipeConsumer : createRecipes) {
-            NamespacedKey key = new NamespacedKey(this, unlocalizedName + (recipeIndex == 0 ? "" : "_" + recipeIndex));
-            ShapedRecipe recipe = new ShapedRecipe(key, item);
-            recipes.add(recipe);
-
-            recipeConsumer.accept(recipe);
-            getServer().addRecipe(recipe);
-
-            recipeIndex++;
-        }
-
-        CustomItem customItem = new CustomItem(item, displayName, unlocalizedName, recipes);
-        customItemCache.add(customItem);
-        return customItem;
-    }
-
-    /**
-     * Adds all custom item recipes to the player's recipe book upon join.
-     */
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        for (CustomItem customItem : customItemCache) {
-            for (ShapedRecipe recipe : customItem.recipes) {
-                event.getPlayer().discoverRecipe(recipe.getKey());
-            }
-        }
-    }
-
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerUse(PlayerInteractEvent event){
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
@@ -285,8 +242,8 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
         }
 
         // Place new warp pad
-        for (Pair<CustomItem, WarpTier> warpPad : warpPads) {
-            if (!warpPad.left.matches(mainHandItem)) {
+        for (CustomItemData<WarpTier> warpPad : warpPads) {
+            if (!warpPad.matches(mainHandItem)) {
                 continue;
             }
 
@@ -296,7 +253,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
-            placeWarpPad(event, warpPad.right);
+            placeWarpPad(event, warpPad.data);
             return;
         }
     }
@@ -387,7 +344,7 @@ public final class SpigotPlugin extends JavaPlugin implements Listener {
 
         event.setDropItems(false);
 
-        ItemStack item = warpPads[removedWarp.tier.id].left.get();
+        ItemStack item = warpPads[removedWarp.tier.id].get();
         ItemMeta meta = Objects.requireNonNull(item.getItemMeta());
         meta.setDisplayName(removedWarp.labelColor + removedWarp.label);
         item.setItemMeta(meta);

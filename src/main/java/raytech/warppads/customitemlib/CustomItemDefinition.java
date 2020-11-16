@@ -1,4 +1,4 @@
-package raytech.warppads;
+package raytech.warppads.customitemlib;
 
 import com.google.common.collect.Multimap;
 import org.bukkit.attribute.Attribute;
@@ -12,7 +12,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import java.util.Arrays;
 
 /**
- * Created by Maxine on 13/11/2020.
+ * Allows for attaching data to the root {@link ItemStack} of a custom item.
  *
  * @author Maxine
  * @since 13/11/2020
